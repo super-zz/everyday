@@ -1,0 +1,63 @@
+/**
+ * @fileoverview input框样式 (内为对勾)
+ * @version 1.0 | 2017-11-01 | ZhengYu     // 初始版本。
+
+ * @description    // 附加说明。
+ *  <input type="checkbox" name="" id="1">
+ *  <label for="1"></label>
+ */
+
+@border-color: #f1f1f1;
+@page-green: #5dcc6f;
+
+.input-check(){
+  input[type="radio"], input[type="checkbox"] {
+    position: absolute;
+    left: -9999px;
+
+    &+label{
+      text-align: left;
+      min-width: 20px;
+      margin-left: 28px;
+      color: @cmn-color_font;
+      position: relative;
+      &:after{
+        content: '';
+        position: absolute;
+        top: 50%;
+        margin-top: -8px;
+        left: -20px;
+        width: 12px;
+        height: 12px;
+        border: 1px solid @border-color;
+      }
+      &.disable:after{
+        border-color: transparent;
+      }
+    }
+    &.blank-text+label:after{
+      margin-top: -12px;
+      right: 0;
+    }
+    &:checked+label{
+      &:after{
+      	content: '\e621';
+  	    font-family: 'zuoyeFont_fudaoIcons';
+  	    font-weight: normal;
+  	    font-style: normal;
+  	    -webkit-font-smoothing: antialiased;
+  	    -moz-osx-font-smoothing: grayscale;
+  	    speak: none;
+  	    font-style: normal;
+  	    font-weight: normal;
+  	    font-variant: normal;
+  	    text-transform: none;
+  	    line-height: 1;
+  	    outline: 0;
+  	    color: #fff;
+        border-color: @page-green;
+  	    background-color: @page-green;
+      }
+    }
+  }
+}
