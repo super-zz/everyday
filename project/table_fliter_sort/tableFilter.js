@@ -18,7 +18,7 @@ function sortTableCel(obj, index, reserved){
 
 function getCellVal(row, colIndex) {
   var $cell = $(row.cells[colIndex]);
-  return $.trim($cell.text());
+  return $.trim($cell.attr('data-sort'));
 };
 
 function TableFilter(args){
@@ -37,18 +37,18 @@ function TableFilter(args){
 	this.originArr = this.$container.find('tr:not('+ this.rate +')');
 
 	this.filterMenuBtn = $(args.filterMenuBtn).length ? args.filterMenuBtn : '[cmd="filter"]';
-	this.$filterMenuBtn = $(args.filterMenuBtn).length ? $(args.filterMenuBtn) : $('[cmd="filter"]');
+	this.$filterMenuBtn = $(args.filterMenuBtn).length ? $(args.filterMenuBtn, this.$tableObj) : $('[cmd="filter"]', this.$tableObj);
 
 	this.filterOptAttr = args.filterOptAttr || 'data-filter-option';
-	this.$filterOptBtn = $('['+ this.filterOptAttr +']');
+	this.$filterOptBtn = $('['+ this.filterOptAttr +']', this.$tableObj);
 
-	this.sortBtn = $(args.sortBtn).length ? $(args.sortBtn) : '[cmd=sort]';
-	this.$sortBtn = $(args.sortBtn).length ? $(args.sortBtn) : $('[cmd=sort]');
+	this.sortBtn = $(args.sortBtn).length ? $(args.sortBtn) : '[cmd="sort"]';
+	this.$sortBtn = $(args.sortBtn).length ? $(args.sortBtn, this.$tableObj) : $('[cmd="sort"]', this.$tableObj);
 
 	this.sortCountAttr = args.sortCountAttr || 'data-counter';
 	
 	this.sortOrigin;
-	this.hasSort = false;
+	this.hasSort = args.hasSort || false;
 
 	this.currentPage;
 	this.filterFragment = {};
@@ -57,6 +57,7 @@ function TableFilter(args){
 }
 
 TableFilter.prototype = {
+  constructor: TableFilter,
 	init: function(){
 		safeCall(this.getCurrentPage, null, this);
 		
@@ -114,16 +115,26 @@ TableFilter.prototype = {
 	changePageFilterOption: function(opt){
 		var self = this;
 
-  	Object.assign(self.filterOption, opt);
+		safeCall(self.optionAssignHas, opt, self);
 
   	self.filterFragment = $.extend(true, {}, self.originArr);
-
+  	console.log(self.filterOption);
   	for( var name in self.filterOption){
 			self.filterOption.hasOwnProperty(name) ?
 				safeCall(self.filterOriginData,[name, self.filterOption[name].index], self) : '';
 		}
 
 		safeCall(self.renderFilterResult, null, self);
+	},
+	optionAssignHas: function (opt) {
+		var self = this;
+
+		for(var name in self.filterOption){
+			opt.hasOwnProperty(name) ? 
+				(self.filterOption[name].value = opt[name].value,
+				self.filterOption[name].index = opt[name].index)
+				: '';
+		}
 	},
 	filterOriginData: function(name, index){
 		var self = this,
@@ -155,7 +166,7 @@ TableFilter.prototype = {
 				
 				if (_index == -1 || !+_value) {continue;}
 
-				$('['+ self.filterOptAttr +'='+ _name +'-'+ _value +']')
+				$('['+ self.filterOptAttr +'='+ _name +'-'+ _value +']', self.$tableObj)
 					.addClass('ding')
 					.siblings('p')
 					.removeClass('ding')
@@ -165,12 +176,12 @@ TableFilter.prototype = {
 		}
 
 	},
-	resetSortStatus: function(){
+	resetSortStatus: function(selector){
 		var self = this;
 
-		self.$tableObj.find(self.sortBtn).each(function(i, v){
+		self.$tableObj.find(self.sortBtn).not(selector).each(function(i, v){
 			$(v).attr(self.sortCountAttr, 0)
-				  .removeClass('.asc .desc');
+				  .removeClass('asc desc');
 		});
 
 	},
@@ -232,30 +243,33 @@ TableFilter.prototype = {
 				index = $this.get(0).cellIndex,
 				flag = parseInt($this.attr(self.sortCountAttr));
 
-				if (flag == 0) {self.sortOrigin = $.extend( true, {}, $sortTr)};
+				if (flag == 0) {
+					self.sortOrigin = $.extend( true, {}, $sortTr)
+					safeCall(self.resetSortStatus, $this.get(0), self);
+				};
 				
 				flag += 1;
 		    $this.attr(self.sortCountAttr, flag);
 
 		    switch (flag % 3) {
 		      case 0:
-		        $this.attr('class', '');
+		        $this.attr('class', 'sort');
 
 		        self.$container.html(self.sortOrigin);
 		        break;
 		      case 1:
-		        $this.attr('class', 'asc');
+		        $this.attr('class', 'sort asc');
 
 		        self.$container.html(sortTableCel($sortTr, index, 1));
 		        break;
 		      case 2:
-		        $this.attr('class', 'desc');
+		        $this.attr('class', 'sort desc');
 
 		        self.$container.html(sortTableCel($sortTr, index, 2));
 		        break;
 		    }
 
-		    self.$container.prepend(self.$rateArr);
+		    self.$rate.length && self.$container.prepend(self.$rate);
 		});
 
 	}
