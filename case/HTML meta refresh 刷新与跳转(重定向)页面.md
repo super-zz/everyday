@@ -1,6 +1,6 @@
 refresh示例
 
-5秒之后刷新本页面:
+每5秒之后刷新本页面:
 
 <meta http-equiv="refresh" content="5" />
 5秒之后定向到百度首页:
