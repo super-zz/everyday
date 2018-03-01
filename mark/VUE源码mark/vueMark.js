@@ -3,6 +3,28 @@
  */
 Object.create(null)
 
+
+/**
+ * 参阅 193-208
+ * 比原生快？？？
+ */
+/**
+ * Simple bind, faster than native
+ */
+function bind (fn, ctx) {
+  function boundFn (a) {
+    var l = arguments.length;
+    return l
+      ? l > 1
+        ? fn.apply(ctx, arguments)
+        : fn.call(ctx, a)
+      : fn.call(ctx)
+  }
+  // record original fn length
+  boundFn._length = fn.length;
+  return boundFn
+}
+
 /**
  * 参阅 266-270
  */
@@ -44,7 +66,6 @@ initialValue
  * 参阅 319-327
  * 函数只被调用一次  闭包
  */
-
 function once (fn) {
   var called = false;
   return function () {
@@ -55,3 +76,13 @@ function once (fn) {
   }
 }
 
+/**
+ * 参阅 499
+ * Firefox has a "watch" function on Object.prototype...
+ */
+var nativeWatch = ({}).watch;
+
+/**
+ * 参阅 
+ * 
+ */

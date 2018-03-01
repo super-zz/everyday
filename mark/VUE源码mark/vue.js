@@ -57,11 +57,6 @@ function isObject (obj) {
  * Get the raw type string of a value e.g. [object Object]
  */
 
-//$$$$$$$$$
-//【mark】 Object.prototype.toString.call(obj) === '[object Object]'
-//$$$$$$$$$
-
-
 var _toString = Object.prototype.toString;
 
 function toRawType (value) {
