@@ -70,6 +70,8 @@ TableFilter.prototype = {
 		safeCall(this.bindFilterMenuShowEvent, null, this);
 
 		safeCall(this.bindCheckfilterEvent, null, this);
+
+		safeCall(this.bindInputRadioEvent, null, this);
 		this.hasSort && safeCall(this.bindSortTableEvent, null, this);
 	},
 	//get pathname
@@ -255,6 +257,21 @@ TableFilter.prototype = {
 			safeCall(self.setOption, [this, +_this.attr(self.checkFilter)], self);
 
 			_this.closest(self.filterMenuBtn).trigger('click');
+		});
+	},
+	bindInputRadioEvent: function(){
+		var self = this;
+
+		$(self.filterContainer).find('input').change(function(e) {
+			e.stopPropagation();
+
+			var sameEle = this.value.split('-')[0];
+			$(this).parents(self.filterContainer).find('input[value^='+sameEle+']').each(function(i, v){
+				
+				v.checked=false;
+				
+			});
+			this.checked=true;
 		});
 	},
 	bindSortTableEvent: function(){
